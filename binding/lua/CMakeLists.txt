@@ -1,0 +1,15 @@
+project(pbc-lua C)
+
+find_package(Lua 5.1 REQUIRED)
+
+add_library(pbc-lua SHARED pbc-lua.c)
+if(WIN32)
+    set_target_properties(pbc-lua PROPERTIES PREFIX "" IMPORT_PREFIX "")
+endif()
+target_link_libraries(pbc-lua libpbc)
+target_include_directories(pbc-lua ${LUA_INCLUDE_DIR})
+target_link_libraries(pbc-lua libpbc ${LUA_LIBRARIES})
+target_compile_definitions(pbc-lua PRIVATE LUA_BUILD_AS_DLL LUA_LIB)
+if(WIN32 AND NOT MSVC)
+  target_link_options(pbc-lua PRIVATE -Wl,--exclude-all-symbols)
+endif()

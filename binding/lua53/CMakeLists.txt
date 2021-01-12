@@ -1,0 +1,18 @@
+project(pbc-lua53 C)
+
+find_package(Lua 5.4 QUIET)
+if(NOT LUA_FOUND)
+  find_package(Lua 5.3 REQUIRED)
+endif()
+
+add_library(pbc-lua53 SHARED pbc-lua53.c)
+if(WIN32)
+  set_target_properties(pbc-lua53 PROPERTIES PREFIX "" IMPORT_PREFIX "")
+endif()
+set_target_properties(pbc-lua53 PROPERTIES OUTPUT_NAME protobuf)
+target_include_directories(pbc-lua53 PRIVATE ${LUA_INCLUDE_DIR})
+target_link_libraries(pbc-lua53 libpbc ${LUA_LIBRARIES})
+target_compile_definitions(pbc-lua53 PRIVATE LUA_BUILD_AS_DLL LUA_LIB)
+if(WIN32 AND NOT MSVC)
+  target_link_options(pbc-lua53 PRIVATE -Wl,--exclude-all-symbols)
+endif()
