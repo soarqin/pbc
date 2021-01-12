@@ -141,7 +141,7 @@ set_msg_one(struct pbc_pattern * FIELD_T, struct pbc_env *p, struct file_t *file
 		f.type_name.n = (const char *)field.type_name.buffer;
 		set_default(&f, &field);
 
-		_pbcP_push_message(p,name, &f , queue);
+		_pbcP_push_message(p,name, &f , queue, 1);
 
 		// don't need to close pattern since no array
 	}

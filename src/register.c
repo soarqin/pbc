@@ -128,15 +128,34 @@ _set_default(struct _stringpool *pool, struct _field *f , int ptype, const char 
 }
 
 static void
-_register_field(struct pbc_rmessage * field, struct _field * f, struct _stringpool *pool) {
+_register_field(struct pbc_rmessage * field, struct _field * f, struct _stringpool *pool, int is_proto3) {
 	f->id = pbc_rmessage_integer(field, "number", 0 , 0);
 	f->type = pbc_rmessage_integer(field, "type", 0 , 0);	// enum
 	f->label = pbc_rmessage_integer(field, "label", 0, 0) - 1; // LABEL_OPTIONAL = 0
-	if (pbc_rmessage_size(field , "options") > 0) {
-		struct pbc_rmessage * options = pbc_rmessage_message(field, "options" , 0);
-		int packed = pbc_rmessage_integer(options , "packed" , 0 , NULL);
-		if (packed) {
-			f->label = LABEL_PACKED;
+	if (is_proto3) {
+		if (f->label == LABEL_REPEATED &&
+			(f->type == PTYPE_DOUBLE   || f->type == PTYPE_FLOAT    ||
+			 f->type == PTYPE_INT64    || f->type == PTYPE_SINT64   ||
+			 f->type == PTYPE_INT32    || f->type == PTYPE_SINT32   ||
+			 f->type == PTYPE_UINT32   || f->type == PTYPE_ENUM     ||
+			 f->type == PTYPE_UINT64   || f->type == PTYPE_FIXED32  ||
+			 f->type == PTYPE_SFIXED32 || f->type == PTYPE_SFIXED64 ||
+			 f->type == PTYPE_FIXED64  || f->type == PTYPE_BOOL)) {
+			if (pbc_rmessage_size(field, "options") > 0) {
+				struct pbc_rmessage *options = pbc_rmessage_message(field, "options", 0);
+				if (pbc_rmessage_size(options, "packed") == 0 ||
+					pbc_rmessage_integer(options, "packed", 0, NULL) > 0) {
+					f->label = LABEL_PACKED;
+				}
+			} else f->label = LABEL_PACKED;
+		}
+	} else {
+		if (pbc_rmessage_size(field, "options") > 0) {
+			struct pbc_rmessage *options = pbc_rmessage_message(field, "options", 0);
+			int packed = pbc_rmessage_integer(options, "packed", 0, NULL);
+			if (packed) {
+				f->label = LABEL_PACKED;
+			}
 		}
 	}
 	f->type_name.n = pbc_rmessage_string(field, "type_name", 0 , NULL) +1;	// abandon prefix '.' 
@@ -146,7 +165,7 @@ _register_field(struct pbc_rmessage * field, struct _field * f, struct _stringpo
 }
 
 static void
-_register_extension(struct pbc_env *p, struct _stringpool *pool , const char * prefix, int prefix_sz, struct pbc_rmessage * msg, pbc_array queue) {
+_register_extension(struct pbc_env *p, struct _stringpool *pool , const char * prefix, int prefix_sz, struct pbc_rmessage * msg, pbc_array queue, int is_proto3) {
 	int extension_count = pbc_rmessage_size(msg , "extension");
 	if (extension_count <= 0) 
 		return;
@@ -161,11 +180,11 @@ _register_extension(struct pbc_env *p, struct _stringpool *pool , const char * p
 		const char * field_name = pbc_rmessage_string(extension , "name" , 0, &field_name_sz);
 		f.name =  _concat_name(pool, prefix, prefix_sz, field_name, field_name_sz, NULL);
 
-		_register_field(extension, &f , pool);
+		_register_field(extension, &f , pool, is_proto3);
 
 		const char * extendee = pbc_rmessage_string(extension , "extendee" , 0, NULL);
 
-		_pbcP_push_message(p, extendee + 1 , &f , queue);
+		_pbcP_push_message(p, extendee + 1 , &f , queue, is_proto3);
 
 		if (last == NULL) {
 			last = extendee;
@@ -178,7 +197,7 @@ _register_extension(struct pbc_env *p, struct _stringpool *pool , const char * p
 }
 
 static void
-_register_message(struct pbc_env *p, struct _stringpool *pool, struct pbc_rmessage * message_type, const char *prefix, int prefix_sz, pbc_array queue) {
+_register_message(struct pbc_env *p, struct _stringpool *pool, struct pbc_rmessage * message_type, const char *prefix, int prefix_sz, pbc_array queue, int is_proto3) {
 	int name_sz;
 	const char * name = pbc_rmessage_string(message_type, "name", 0 , &name_sz);
 	int sz = 0;
@@ -193,14 +212,14 @@ _register_message(struct pbc_env *p, struct _stringpool *pool, struct pbc_rmessa
 		const char * field_name = pbc_rmessage_string(field, "name", 0 , &field_name_sz);
 		f.name = _pbcS_build(pool,field_name,field_name_sz);
 
-		_register_field(field, &f , pool);
+		_register_field(field, &f , pool, is_proto3);
 
-		_pbcP_push_message(p, temp , &f , queue);
+		_pbcP_push_message(p, temp , &f , queue, is_proto3);
 	}
 
 	_pbcP_init_message(p, temp);
 
-	_register_extension(p, pool, temp, sz,message_type, queue);
+	_register_extension(p, pool, temp, sz,message_type, queue, is_proto3);
 
 	// nested enum
 
@@ -215,14 +234,15 @@ _register_message(struct pbc_env *p, struct _stringpool *pool, struct pbc_rmessa
 	int message_count = pbc_rmessage_size(message_type, "nested_type");
 	for (i=0;i<message_count;i++) {
 		struct pbc_rmessage * nested_type = pbc_rmessage_message(message_type, "nested_type", i);
-		_register_message(p, pool, nested_type, temp, sz, queue);
+		_register_message(p, pool, nested_type, temp, sz, queue, is_proto3);
 	}
 }
 
 static void
 _register(struct pbc_env *p, struct pbc_rmessage * file, struct _stringpool *pool) {
-	int package_sz;
+	int package_sz, proto_sz;
 	const char *package = pbc_rmessage_string(file, "package", 0, &package_sz);
+	int is_proto3 = pbc_rmessage_size(file, "syntax") > 0 && strcmp(pbc_rmessage_string(file, "syntax", 0, &proto_sz), "proto3") == 0;
 
 	pbc_array queue;
 	_pbcA_open(queue);
@@ -238,10 +258,10 @@ _register(struct pbc_env *p, struct pbc_rmessage * file, struct _stringpool *poo
 	int message_count = pbc_rmessage_size(file, "message_type");
 	for (i=0;i<message_count;i++) {
 		struct pbc_rmessage * message_type = pbc_rmessage_message(file, "message_type", i);
-		_register_message(p, pool, message_type, package, package_sz, queue);
+		_register_message(p, pool, message_type, package, package_sz, queue, is_proto3);
 	}
 
-	_register_extension(p, pool, package, package_sz, file , queue);
+	_register_extension(p, pool, package, package_sz, file , queue, is_proto3);
 
 	_pbcB_register_fields(p, queue);
 

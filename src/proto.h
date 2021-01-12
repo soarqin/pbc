@@ -38,6 +38,9 @@ struct _message {
 	struct map_ip * id;	// id -> _field
 	struct map_sp * name;	// string -> _field
 	struct pbc_rmessage * def;	// default message
+	int optional_no_comp; // do not compare optional fields with default value and ignore
+						  // it on equal. proto3 needs this, also required by bootstrap
+						  // for proto3 option [packed=false]
 	struct pbc_env * env;
 };
 
@@ -56,7 +59,7 @@ struct pbc_env {
 };
 
 struct _message * _pbcP_init_message(struct pbc_env * p, const char *name);
-void _pbcP_push_message(struct pbc_env * p, const char *name, struct _field *f , pbc_array queue);
+void _pbcP_push_message(struct pbc_env * p, const char *name, struct _field *f , pbc_array queue, int optional_no_comp);
 struct _enum * _pbcP_push_enum(struct pbc_env * p, const char *name, struct map_kv *table, int sz );
 int _pbcP_message_default(struct _message * m, const char * name, pbc_var defv);
 struct _message * _pbcP_get_message(struct pbc_env * p, const char *name);

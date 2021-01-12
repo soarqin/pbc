@@ -74,6 +74,7 @@ local value = str + bool + name + id
 local patterns = {}
 
 local enum_item = Cg(name * blank0 * "=" * blank0 * id * blank0 * ";" * blank0)
+local header = (P"syntax" * blank0 * P"=" * blank0 * P"\"" * blank0 * Cg(P"proto2" + P"proto3", "syntax") * blank0 * P"\"" * blank0 * P";" * blank0) ^ -1
 
 local function insert(tbl, k,v)
 	tinsert(tbl, { name = k , number = v })
@@ -85,9 +86,10 @@ patterns.ENUM = Ct(Cg("enum","type") * blanks * Cg(typename,"name") * blank0 *
 		Cg(lpeg.Cf(Ct"" * enum_item^1 , insert),"value")
 	* "}" * blank0)
 
-local prefix_field = P"required" * Cc"LABEL_REQUIRED" +
-	P"optional" * Cc"LABEL_OPTIONAL" +
-	P"repeated" * Cc"LABEL_REPEATED"
+local prefix_field = P"required" * blanks * Cc"LABEL_REQUIRED" +
+	P"optional" * blanks * Cc"LABEL_OPTIONAL" +
+	P"repeated" * blanks * Cc"LABEL_REPEATED" +
+	Cc"LABEL_OPTIONAL"
 local postfix_pair = blank0 * Cg(name * blank0 * "=" * blank0 * value * blank0)
 local postfix_pair_2 = blank0 * "," * postfix_pair
 local postfix_field = "[" * postfix_pair * postfix_pair_2^0 * blank0 * "]"
@@ -101,7 +103,7 @@ local function setoption(t, options)
 end
 
 local message_field = lpeg.Cf (
-	Ct(	Cg(prefix_field,"label") * blanks *
+	Ct(	Cg(prefix_field,"label") *
 		Cg(typename,"type_name") * blanks *
 		Cg(name,"name") * blank0 * "=" * blank0 *
 		Cg(id,"number")
@@ -146,7 +148,7 @@ do
 		proto_tbl[k] = v
 		p = p + V(k)
 	end
-	proto_tbl.PROTO = Ct(blank0 * p ^ 1)
+	proto_tbl.PROTO = Ct(blank0 * header * p ^ 1)
 end
 
 local proto = P(proto_tbl)
@@ -346,7 +348,11 @@ local parser = {}
 local function parser_one(text,filename)
 	local state = { file = filename, pos = 0, line = 1 }
 	local r = lpeg.match(proto * -1 + exception , text , 1, state )
+	local syntax = r.syntax
 	local t = fix(r)
+	if syntax ~= nil then
+		t.syntax = syntax
+	end
 	return t
 end
 

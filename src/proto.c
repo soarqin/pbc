@@ -90,7 +90,7 @@ _pbcP_push_enum(struct pbc_env * p, const char *name, struct map_kv *table, int 
 }
 
 void 
-_pbcP_push_message(struct pbc_env * p, const char *name, struct _field *f , pbc_array queue) {
+_pbcP_push_message(struct pbc_env * p, const char *name, struct _field *f , pbc_array queue, int optional_no_comp) {
 	struct _message * m = (struct _message *)_pbcM_sp_query(p->msgs, name);
 	if (m==NULL) {
 		m = (struct _message *)malloc(sizeof(*m));
@@ -98,6 +98,7 @@ _pbcP_push_message(struct pbc_env * p, const char *name, struct _field *f , pbc_
 		m->key = name;
 		m->id = NULL;
 		m->name = _pbcM_sp_new(0 , NULL);
+		m->optional_no_comp = optional_no_comp;
 		m->env = p;
 		_pbcM_sp_insert(p->msgs, name, m);
 	}
